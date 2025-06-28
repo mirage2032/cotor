@@ -1,0 +1,7 @@
+[workspace]
+resolver = "3"
+members = [
+    "cotor_server",
+    "cotor_client",
+    "cotor_core",
+]
