@@ -25,13 +25,13 @@ pub enum FileTransferAction {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FileTransferPacket {
+pub struct FileTransferPacketData {
     pub transfer_id: Uuid,
     pub action: FileTransferAction,
 }
 
 #[typetag::serde]
-impl AnyPacketData for FileTransferPacket {
+impl AnyPacketData for FileTransferPacketData {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

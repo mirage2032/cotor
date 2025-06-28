@@ -1,15 +1,23 @@
-use crate::network::crypt;
 use crate::network::packet::AnyPacketData;
 use serde::{Deserialize, Serialize};
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum RSAPacketData {
-    PublicKey(crypt::rsa::RSAPublicKey),
+pub struct FileEntry {
+    pub name: String,
+    pub size: u64,
+    pub is_directory: bool,
+    pub modified_time: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ListDirPacketData {
+    Request(String),
+    Response(Vec<FileEntry>),
     Error(String),
-    Ok,
 }
 
 #[typetag::serde]
-impl AnyPacketData for RSAPacketData {
+impl AnyPacketData for ListDirPacketData {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

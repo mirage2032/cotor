@@ -2,14 +2,14 @@ use crate::network::crypt;
 use crate::network::packet::AnyPacketData;
 use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum RSAPacket {
+pub enum RSAPacketData {
     PublicKey(crypt::rsa::RSAPublicKey),
     Error(String),
     Ok,
 }
 
 #[typetag::serde]
-impl AnyPacketData for RSAPacket {
+impl AnyPacketData for RSAPacketData {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

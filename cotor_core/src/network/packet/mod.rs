@@ -1,6 +1,10 @@
 pub mod aes;
 pub mod filetransfer;
 pub mod rsa;
+pub mod listdir;
+pub mod shell;
+pub mod screenshot;
+pub mod keylog;
 
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
