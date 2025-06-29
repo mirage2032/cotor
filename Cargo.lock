@@ -622,9 +622,11 @@ dependencies = [
  "aead",
  "aes-gcm",
  "bincode",
+ "once_cell",
  "rand 0.9.1",
  "rsa 0.10.0-rc.1",
  "serde",
+ "tokio",
  "typetag",
  "uuid",
 ]
@@ -636,11 +638,15 @@ dependencies = [
  "arti-client",
  "cotor_core",
  "futures-util",
+ "serde",
  "tokio",
  "tokio-util",
  "tor-cell",
  "tor-hsservice",
  "tor-rtcompat",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]

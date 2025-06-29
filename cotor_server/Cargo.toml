@@ -4,11 +4,15 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+tokio.workspace = true
+futures-util.workspace = true
+serde.workspace = true
+uuid.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
 cotor_core = { path = "../cotor_core" }
 arti-client = { version = "0.31.0", features = ["tokio","onion-service-service","static-sqlite"] }
 tor-hsservice = "0.31.0"
 tor-rtcompat = { version="0.31.0",features = ["tokio"] }
-tokio = { version = "1.45.1", features = ["full"] }
-futures-util = "0.3.31"
 tor-cell = {version = "0.31.0"}
 tokio-util = "0.7.15"
