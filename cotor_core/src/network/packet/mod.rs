@@ -10,16 +10,9 @@ pub mod message;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::fmt::Debug;
-use bincode::config::{Configuration, Fixint, LittleEndian};
 use crate::network::crypt;
 use once_cell::sync::Lazy;
 use tokio::io::{AsyncReadExt,AsyncWriteExt};
-
-const fn bincode_config() -> Configuration<LittleEndian, Fixint> {
-    bincode::config::standard()
-        .with_little_endian()
-        .with_fixed_int_encoding()
-}
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub enum PacketEncryption{
@@ -46,16 +39,16 @@ impl PacketHeader {
         }
     }
     pub fn bin_serialize(&self) -> Result<Vec<u8>, String> {
-        bincode::serde::encode_to_vec(self, bincode_config()).map_err(|_| "Failed to serialize packet header".to_string())
+        rmp_serde::to_vec(self).map_err(|_| "Failed to serialize packet header".to_string())
     }
     pub fn bin_deserialize(data: &[u8]) -> Result<Self, String> {
-        let (header, _size) = bincode::serde::decode_from_slice(data, bincode_config()).map_err(|_| "Failed to decode packet header".to_string())?;
+        let header = rmp_serde::from_slice(data).map_err(|_| "Failed to decode packet header".to_string())?;
         Ok(header)
     }
 }
 
 static PACKET_HEADER_SIZE: Lazy<usize> = Lazy::new(|| {
-    bincode::serde::encode_to_vec(&PacketHeader::new(0, PacketEncryption::Plain), bincode_config())
+    rmp_serde::to_vec(&PacketHeader::new(0, PacketEncryption::Plain))
         .expect("Failed to serialize PacketHeader for size calculation")
         .len()
 });
@@ -111,11 +104,11 @@ impl From<PacketData> for Box<dyn AnyPacketData> {
 }
 
 impl PacketData {
-    pub fn bin_serialize(&self) -> Result<Vec<u8>, bincode::error::EncodeError> {
-        bincode::serde::encode_to_vec(self, bincode_config())
+    pub fn bin_serialize(&self) -> Result<Vec<u8>, String> {
+        rmp_serde::to_vec(self).map_err(|_| "Failed to serialize packet data".to_string())
     }
 
-    pub fn plain_encode(&self) -> Result<NetworkPacket, bincode::error::EncodeError> {
+    pub fn plain_encode(&self) -> Result<NetworkPacket, String> {
         let data = self.bin_serialize()?;
         let header = PacketHeader::new(data.len() as u32, PacketEncryption::Plain);
         Ok(NetworkPacket {
@@ -145,9 +138,7 @@ impl PacketData {
     }
 
     pub fn bin_deserialize(data: &[u8]) -> Result<Self, String> {
-        let (data, _size) = bincode::serde::decode_from_slice(data, bincode_config())
-            .map_err(|err| format!("Failed to deserialize packet data: {}", err))?;
-        data
+        rmp_serde::from_slice(data).map_err(|_| "Failed to deserialize packet data".to_string())
     }
 
     pub fn aes_decode(
