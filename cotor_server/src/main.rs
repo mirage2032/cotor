@@ -1,4 +1,4 @@
-use cotor_core::network::packet::NetworkPacket;
+use cotor_core::network::packet::{NetworkPacket, PacketEncryption};
 use cotor_core::network::packet::AnyPacketData;
 use cotor_core::network::packet::PacketData;
 use tracing::event;
@@ -9,6 +9,7 @@ use tracing_subscriber::util::SubscriberInitExt;
 use cotor_core::network::packet::message::MessageData;
 use cotor_core::network::crypt::aes::AESKey;
 use cotor_core::network::crypt::KeyChain;
+use cotor_core::network::crypt::rsa::RSAPrivateKey;
 
 mod server;
 mod clientconn;
@@ -47,20 +48,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let span = tracing::info_span!(ROOT_SPAN_NAME);
     let _enter = span.enter();
 
-    let aes_key = AESKey::new()?;
     let mut key_chain = KeyChain::default();
-    key_chain.aes_key = Some(aes_key.clone());
+    key_chain.aes_key = Some(AESKey::new()?);
+    let rsa_private_key = RSAPrivateKey::new()?;
+    let rsa_public_key = rsa_private_key.public_key();
+    key_chain.rsa_private_key = Some(rsa_private_key);
+    key_chain.rsa_public_key = Some(rsa_public_key);
 
-    let message:Box<dyn AnyPacketData> = Box::new(MessageData::new_debug("Test message".to_string()));
+    let message= MessageData::new_debug("Test message".to_string());
     let packet = PacketData::from(message);
-    let network_packet = packet.plain_encode()?;
+    let network_packet = NetworkPacket::new(
+        &packet,
+        PacketEncryption::RSA,
+        &key_chain
+    )?;
     // let received_packet_data = PacketData::bin_deserialize(&network_packet.data)?;
     //create a stream to write to and then be able to read from
     let mut stream = std::io::Cursor::new(Vec::new());
     network_packet.send(&mut stream).await?;
     stream.set_position(0); // Reset the cursor to the beginning of the stream
     let received_packet = NetworkPacket::from_stream(&mut stream).await?;
-    let received_packet_data = PacketData::bin_deserialize(received_packet.data.as_slice())?;
+    let received_packet_data = received_packet.decrypt(&key_chain)?;
     println!("Received packet data: {:?}", received_packet_data);
     // let mut server = server::COTORServer::new().await?;
     // server.start().await?;

@@ -15,6 +15,10 @@ impl RSAPrivateKey {
     pub fn decrypt(&self, data: &[u8]) -> Result<Vec<u8>, rsa::errors::Error> {
         self.private_key.decrypt(Pkcs1v15Encrypt, data)
     }
+    
+    pub fn public_key(&self) -> RSAPublicKey {
+        RSAPublicKey::from_private_key(self)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

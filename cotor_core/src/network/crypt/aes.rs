@@ -37,7 +37,7 @@ impl AESKey {
         Ok(encoded_data)
     }
 
-    pub fn decrypt(&self, data: &[u8]) -> Result<Vec<u8>, &'static str> {
+    pub fn decrypt(&self, data: &[u8]) -> Result<Vec<u8>, String> {
         let nonce = data.get(0..12)
             .ok_or("Data too short for nonce")?
             .try_into()
@@ -47,8 +47,7 @@ impl AESKey {
         let key: &Key<Aes256Gcm> = (&self.key).into();
         let cipher = Aes256Gcm::new(key);
         let plaintext = cipher
-            .decrypt(nonce, data)
-            .map_err(|_| "Decryption failed")?;
+            .decrypt(nonce, ciphertext).map_err(|err| err.to_string())?;
         Ok(plaintext)
     }
 }

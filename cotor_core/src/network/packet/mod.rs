@@ -111,22 +111,30 @@ impl NetworkPacket {
         Ok(())
     }
 
-    pub fn new_plain(&self, packet_data: &PacketData) -> Result<NetworkPacket, String> {
+    pub fn new_plain(packet_data: &PacketData) -> Result<NetworkPacket, String> {
         packet_data.plain_encode()
             .map_err(|_| "Failed to encrypt packet with plain encoding".to_string())
     }
 
-    pub fn new_aes(&self, packet_data: &PacketData, key_chain: &KeyChain) -> Result<NetworkPacket, String> {
+    pub fn new_aes(packet_data: &PacketData, key_chain: &KeyChain) -> Result<NetworkPacket, String> {
         packet_data.aes_encode(key_chain.aes_key.as_ref().ok_or("AES key not found in key chain")?)
             .map_err(|_| "Failed to encrypt packet with AES".to_string())
     }
 
-    pub fn new_rsa(&self, packet_data: &PacketData, key_chain: &KeyChain) -> Result<NetworkPacket, String> {
+    pub fn new_rsa(packet_data: &PacketData, key_chain: &KeyChain) -> Result<NetworkPacket, String> {
         packet_data.rsa_encode(key_chain.rsa_public_key.as_ref().ok_or("RSA public key not found in key chain")?)
             .map_err(|_| "Failed to encrypt packet with RSA".to_string())
     }
 
-    pub fn decrypt(&self, key_chain: KeyChain) -> Result<PacketData, String> {
+    pub fn new(packet_data: &PacketData, encryption: PacketEncryption, key_chain: &KeyChain) -> Result<NetworkPacket, String> {
+        match encryption {
+            PacketEncryption::Plain => Self::new_plain(packet_data),
+            PacketEncryption::AES => Self::new_aes(packet_data, key_chain),
+            PacketEncryption::RSA => Self::new_rsa(packet_data, key_chain),
+        }
+    }
+
+    pub fn decrypt(&self, key_chain: &KeyChain) -> Result<PacketData, String> {
         let packet = match self.header.encryption {
             PacketEncryption::Plain => PacketData::bin_deserialize(&self.data).unwrap(),
             PacketEncryption::AES => {
@@ -138,8 +146,8 @@ impl NetworkPacket {
                 }
             },
             PacketEncryption::RSA => {
-                match key_chain.rsa_private_key {
-                    Some(rsa_private_key) => PacketData::rsa_decode(&self.data, &rsa_private_key)?,
+                match &key_chain.rsa_private_key {
+                    Some(rsa_private_key) => PacketData::rsa_decode(&self.data, rsa_private_key)?,
                     None => {
                         return Err("RSA private key not found in key chain".to_string());
                     }
@@ -154,14 +162,15 @@ impl NetworkPacket {
 pub trait AnyPacketData: Any + Send + Sync + Debug {
     fn as_any(&self) -> &dyn Any;
 }
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PacketData {
     pub inner: Box<dyn AnyPacketData>,
 }
 
-impl From<Box<dyn AnyPacketData>> for PacketData {
-    fn from(value: Box<dyn AnyPacketData>) -> Self {
-        PacketData { inner: value }
+impl<PD:AnyPacketData+Sized> From<PD> for PacketData {
+    fn from(value: PD) -> Self {
+        PacketData { inner: Box::new(value) }
     }
 }
 
@@ -220,7 +229,7 @@ impl PacketData {
     ) -> Result<Self, String> {
         let decoded_data = aes_key
             .decrypt(data)
-            .map_err(|_| "Decryption failed")?;
+            .map_err(|err| format!("Decryption failed: {}", err))?;
         Self::bin_deserialize(&decoded_data)
     }
 
