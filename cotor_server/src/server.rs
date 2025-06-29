@@ -74,10 +74,16 @@ impl COTORServer {
                         Some(request) => {
                                 match request.accept(Connected::new_empty()).await{
                                     Ok(stream) => {
-                                        let client_conn = ClientConnection::new(stream, cancel_token.child_token(), |id| async move{
-                                            // let connected_clients = connected_clients.clone();
-                                            // connected_clients.lock().await.remove(id);
-                                        });
+                                        let connected_clients_clone = connected_clients.clone();
+                                        let client_conn = ClientConnection::new(stream, cancel_token.child_token(),
+                                            move |id| {
+                                                let id = *id;
+                                                let connected_clients_clone = connected_clients_clone.clone();
+                                                Box::pin(async move {
+                                                    connected_clients_clone.lock().await.remove(&id);//TODO:LEFT HERE
+                                                })
+                                            }
+                                        );
                                         event!(tracing::Level::INFO, "Established client connection: {:?}", client_conn.uuid());
                                         connected_clients.lock().await.insert(client_conn.uuid(), client_conn);
                                     }
