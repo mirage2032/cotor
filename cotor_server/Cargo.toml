@@ -5,3 +5,10 @@ edition = "2024"
 
 [dependencies]
 cotor_core = { path = "../cotor_core" }
+arti-client = { version = "0.31.0", features = ["tokio","onion-service-service","static-sqlite"] }
+tor-hsservice = "0.31.0"
+tor-rtcompat = { version="0.31.0",features = ["tokio"] }
+tokio = { version = "1.45.1", features = ["full"] }
+futures-util = "0.3.31"
+tor-cell = {version = "0.31.0"}
+tokio-util = "0.7.15"

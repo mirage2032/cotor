@@ -5,13 +5,13 @@ use uuid::Uuid;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileTransferInitData {
     pub file_location: String,
-    pub file_size: usize,
+    pub file_size: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileTransferProgressData {
-    pub chunk_number: usize,
-    pub total_chunks: usize,
+    pub chunk_number: u32,
+    pub total_chunks: u32,
     pub data: Vec<u8>,
 }
 
