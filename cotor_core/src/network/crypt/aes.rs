@@ -8,51 +8,6 @@ use serde::{Deserialize, Serialize};
 pub struct AESKey {
     key: [u8; 32],
 }
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AESEncodedData {
-    data: Vec<u8>,
-}
-
-impl AESEncodedData {
-    pub fn data(&self) -> &[u8] {
-        &self.data
-    }
-    pub fn from_bytes(data: &[u8]) -> Result<Self, &'static str> {
-        if data.len() < 12 {
-            return Err("Data too short for nonce");
-        }
-        Ok(Self {
-            data: data.to_vec(),
-        })
-    }
-
-    pub fn nonce(&self) -> Result<&[u8;12], &'static str> {
-        if self.data.len() < 12 {
-            return Err("Data too short for nonce");
-        }
-        self.data[0..12].try_into().map_err(|_|"Invalid nonce length")
-    }
-
-    pub fn ciphertext(&self) -> Result<&[u8], &'static str> {
-        if self.data.len() < 12 {
-            return Err("Data too short for nonce");
-        }
-        self.data[12..].try_into().map_err(|_|"Invalid nonce length")
-    }
-}
-
-impl From<Vec<u8>> for AESEncodedData {
-    fn from(data: Vec<u8>) -> Self {
-        Self { data }
-    }
-}
-
-impl Into<Vec<u8>> for AESEncodedData {
-    fn into(self) -> Vec<u8> {
-        self.data
-    }
-}
 impl AESKey {
     pub fn new() -> Result<Self, &'static str> {
         let key = Aes256Gcm::generate_key().map_err(|_| "Failed to generate key")?;
@@ -69,7 +24,7 @@ impl AESKey {
         Ok(Self { key: *key })
     }
 
-    pub fn encrypt(&self, data: &[u8]) -> Result<AESEncodedData, &'static str> {
+    pub fn encrypt(&self, data: &[u8]) -> Result<Vec<u8>, &'static str> {
         let key: &Key<Aes256Gcm> = (&self.key).into();
         let cipher = Aes256Gcm::new(key);
         let nonce = Aes256Gcm::generate_nonce().map_err(|_| "Failed to generate nonce")?;
@@ -79,17 +34,20 @@ impl AESKey {
         let mut encoded_data = Vec::with_capacity(12 + ciphertext.len());
         encoded_data.extend_from_slice(nonce.as_ref());
         encoded_data.extend_from_slice(&ciphertext);
-        Ok(AESEncodedData {
-            data: encoded_data,
-        })
+        Ok(encoded_data)
     }
 
-    pub fn decrypt(&self, data: impl Into<AESEncodedData>) -> Result<Vec<u8>, &'static str> {
-        let data = data.into();
+    pub fn decrypt(&self, data: &[u8]) -> Result<Vec<u8>, &'static str> {
+        let nonce = data.get(0..12)
+            .ok_or("Data too short for nonce")?
+            .try_into()
+            .map_err(|_| "Invalid nonce length")?;
+        let ciphertext = data.get(12..)
+            .ok_or("Data too short for ciphertext")?;
         let key: &Key<Aes256Gcm> = (&self.key).into();
         let cipher = Aes256Gcm::new(key);
         let plaintext = cipher
-            .decrypt(data.nonce()?.into(), data.ciphertext()?)
+            .decrypt(nonce, data)
             .map_err(|_| "Decryption failed")?;
         Ok(plaintext)
     }
