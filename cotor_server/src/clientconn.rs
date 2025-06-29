@@ -1,11 +1,10 @@
 use arti_client::DataStream;
 use cotor_core::network::packet::NetworkPacket;
 use std::ops::DerefMut;
-use std::pin::Pin;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
-use tracing::{event, info_span, instrument, Instrument};
+use tracing::{event, instrument};
 use uuid::Uuid;
 
 struct ClientConnTasks {

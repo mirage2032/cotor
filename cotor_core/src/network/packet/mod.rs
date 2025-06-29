@@ -11,6 +11,7 @@ use crate::network::crypt;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::fmt::Debug;
+use serde::de::DeserializeOwned;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use crate::network::crypt::KeyChain;
 
@@ -111,22 +112,22 @@ impl NetworkPacket {
         Ok(())
     }
 
-    pub fn new_plain(packet_data: &PacketData) -> Result<NetworkPacket, String> {
+    pub fn new_plain<'a>(packet_data: &impl EncodablePacket) -> Result<NetworkPacket, String> {
         packet_data.plain_encode()
             .map_err(|_| "Failed to encrypt packet with plain encoding".to_string())
     }
 
-    pub fn new_aes(packet_data: &PacketData, key_chain: &KeyChain) -> Result<NetworkPacket, String> {
+    pub fn new_aes<'a>(packet_data: &impl EncodablePacket, key_chain: &KeyChain) -> Result<NetworkPacket, String> {
         packet_data.aes_encode(key_chain.aes_key.as_ref().ok_or("AES key not found in key chain")?)
             .map_err(|_| "Failed to encrypt packet with AES".to_string())
     }
 
-    pub fn new_rsa(packet_data: &PacketData, key_chain: &KeyChain) -> Result<NetworkPacket, String> {
+    pub fn new_rsa<'a>(packet_data: &impl EncodablePacket, key_chain: &KeyChain) -> Result<NetworkPacket, String> {
         packet_data.rsa_encode(key_chain.rsa_public_key.as_ref().ok_or("RSA public key not found in key chain")?)
             .map_err(|_| "Failed to encrypt packet with RSA".to_string())
     }
 
-    pub fn new(packet_data: &PacketData, encryption: PacketEncryption, key_chain: &KeyChain) -> Result<NetworkPacket, String> {
+    pub fn new<'a>(packet_data: &impl EncodablePacket, encryption: PacketEncryption, key_chain: &KeyChain) -> Result<NetworkPacket, String> {
         match encryption {
             PacketEncryption::Plain => Self::new_plain(packet_data),
             PacketEncryption::AES => Self::new_aes(packet_data, key_chain),
@@ -134,12 +135,21 @@ impl NetworkPacket {
         }
     }
 
-    pub fn decrypt(&self, key_chain: &KeyChain) -> Result<PacketData, String> {
-        let packet = match self.header.encryption {
-            PacketEncryption::Plain => PacketData::bin_deserialize(&self.data).unwrap(),
+    pub fn decrypt(&self, key_chain: &KeyChain) -> Result<Box<dyn AnyPacketData>, String> {
+        let data  = &self.data;
+        let packet:Box<dyn AnyPacketData> = match self.header.encryption {
+            PacketEncryption::Plain => {
+                rmp_serde::from_slice(data)
+                    .map_err(|err| format!("Failed to decode plain packet data: {}", err))?
+            }
             PacketEncryption::AES => {
                 match key_chain.aes_key {
-                    Some(aes_key) => PacketData::aes_decode(&self.data, &aes_key)?,
+                    Some(aes_key) => {
+                        let decrypted_data = aes_key.decrypt(&self.data)
+                            .map_err(|_| "Failed to decrypt AES packet data".to_string())?;
+                        rmp_serde::from_slice(decrypted_data.as_slice())
+                            .map_err(|_| "Failed to decode AES packet data".to_string())?
+                    },
                     None => {
                         return Err("AES key not found in key chain".to_string());
                     }
@@ -147,7 +157,12 @@ impl NetworkPacket {
             },
             PacketEncryption::RSA => {
                 match &key_chain.rsa_private_key {
-                    Some(rsa_private_key) => PacketData::rsa_decode(&self.data, rsa_private_key)?,
+                    Some(rsa_private_key) => {
+                        let decrypted_data = rsa_private_key.decrypt(&self.data)
+                            .map_err(|_| "Failed to decrypt RSA packet data".to_string())?;
+                        rmp_serde::from_slice(decrypted_data.as_slice())
+                            .map_err(|_| "Failed to decode RSA packet data".to_string())?
+                    }
                     None => {
                         return Err("RSA private key not found in key chain".to_string());
                     }
@@ -159,39 +174,29 @@ impl NetworkPacket {
 }
 
 #[typetag::serde(tag = "type")]
-pub trait AnyPacketData: Any + Send + Sync + Debug {
+pub trait AnyPacketData: Any + Send + Sync + Debug  {
     fn as_any(&self) -> &dyn Any;
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct PacketData {
-    pub inner: Box<dyn AnyPacketData>,
+pub trait EncodablePacket: AnyPacketData + Serialize + DeserializeOwned + Send + Sync {
+    fn bin_serialize(&self) -> Result<Vec<u8>, String>;
+    fn plain_encode(&self) -> Result<NetworkPacket, String>;
+    fn aes_encode(&self, aeskey: &crypt::aes::AESKey) -> Result<NetworkPacket, &'static str>;
+    fn rsa_encode(&self, rsakey: &crypt::rsa::RSAPublicKey) -> Result<NetworkPacket, String>;
 }
-
-impl<PD:AnyPacketData+Sized> From<PD> for PacketData {
-    fn from(value: PD) -> Self {
-        PacketData { inner: Box::new(value) }
-    }
-}
-
-impl From<PacketData> for Box<dyn AnyPacketData> {
-    fn from(packet_data: PacketData) -> Self {
-        packet_data.inner
-    }
-}
-
-impl PacketData {
-    pub fn bin_serialize(&self) -> Result<Vec<u8>, String> {
-        rmp_serde::to_vec(self).map_err(|_| "Failed to serialize packet data".to_string())
+impl<T:AnyPacketData + Serialize + DeserializeOwned + Send + Sync> EncodablePacket for T {
+    fn bin_serialize(&self) -> Result<Vec<u8>, String> {
+        let data: &dyn AnyPacketData = self;
+        rmp_serde::to_vec(data).map_err(|_| "Failed to serialize packet data".to_string())
     }
 
-    pub fn plain_encode(&self) -> Result<NetworkPacket, String> {
+    fn plain_encode(&self) -> Result<NetworkPacket, String> {
         let data = self.bin_serialize()?;
         let header = PacketHeader::new(data.len() as u32, PacketEncryption::Plain);
         Ok(NetworkPacket { header, data })
     }
 
-    pub fn aes_encode(&self, aeskey: &crypt::aes::AESKey) -> Result<NetworkPacket, &'static str> {
+    fn aes_encode(&self, aeskey: &crypt::aes::AESKey) -> Result<NetworkPacket, &'static str> {
         let encoded_data = self
             .bin_serialize()
             .map_err(|_| "Failed to encode packet")?;
@@ -205,7 +210,7 @@ impl PacketData {
         })
     }
 
-    pub fn rsa_encode(&self, rsakey: &crypt::rsa::RSAPublicKey) -> Result<NetworkPacket, String> {
+    fn rsa_encode(&self, rsakey: &crypt::rsa::RSAPublicKey) -> Result<NetworkPacket, String> {
         let encoded_data = self
             .bin_serialize()
             .map_err(|_| "Failed to encode packet")?;
@@ -217,29 +222,5 @@ impl PacketData {
             header,
             data: encrypted_data,
         })
-    }
-
-    pub fn bin_deserialize(data: &[u8]) -> Result<Self, String> {
-        rmp_serde::from_slice(data).map_err(|_| "Failed to deserialize packet data".to_string())
-    }
-
-    pub fn aes_decode(
-        data: &[u8],
-        aes_key: &crypt::aes::AESKey,
-    ) -> Result<Self, String> {
-        let decoded_data = aes_key
-            .decrypt(data)
-            .map_err(|err| format!("Decryption failed: {}", err))?;
-        Self::bin_deserialize(&decoded_data)
-    }
-
-    pub fn rsa_decode(
-        data: &[u8],
-        private_key: &crypt::rsa::RSAPrivateKey,
-    ) -> Result<Self, String> {
-        let decoded_data = private_key
-            .decrypt(&data)
-            .map_err(|_| "Decryption failed")?;
-        Self::bin_deserialize(&decoded_data)
     }
 }

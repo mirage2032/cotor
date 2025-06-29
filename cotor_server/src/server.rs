@@ -9,7 +9,7 @@ use tor_cell::relaycell::msg::Connected;
 use tor_hsservice::config::OnionServiceConfigBuilder;
 use tor_hsservice::{RendRequest, RunningOnionService};
 use tor_rtcompat::PreferredRuntime;
-use tracing::{event, info_span, instrument, Instrument, Span};
+use tracing::{event, info_span, instrument, Instrument};
 use uuid::Uuid;
 use crate::clientconn::ClientConnection;
 
@@ -116,16 +116,12 @@ impl COTORServer {
     #[instrument(skip(self))]
     pub async fn stop(&mut self) {
         self.cancel_token.cancel();
-        event!(tracing::Level::INFO, "COTOR Service stopped.");
+        event!(tracing::Level::INFO, "COTOR Server stopped.");
     }
 }
 
 impl Drop for COTORServer {
     fn drop(&mut self) {
-        if let Some(handle) = self.acceptor_handle.take() {
-            handle.abort();
-        }
         self.cancel_token.cancel();
-        event!(tracing::Level::INFO, "COTOR Server dropped.");
     }
 }
