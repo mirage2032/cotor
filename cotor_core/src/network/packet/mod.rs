@@ -93,18 +93,20 @@ impl NetworkPacket {
 pub trait AnyPacketData: Any + Send + Sync + Debug {
     fn as_any(&self) -> &dyn Any;
 }
-#[derive(Serialize, Deserialize)]
-pub struct PacketData(Box<dyn AnyPacketData>);
+#[derive(Debug,Serialize, Deserialize)]
+pub struct PacketData{
+    pub inner: Box<dyn AnyPacketData>,
+}
 
 impl From<Box<dyn AnyPacketData>> for PacketData {
     fn from(value: Box<dyn AnyPacketData>) -> Self {
-        PacketData(value)
+        PacketData{inner: value}
     }
 }
 
 impl From<PacketData> for Box<dyn AnyPacketData> {
     fn from(packet_data: PacketData) -> Self {
-        packet_data.0
+        packet_data.inner
     }
 }
 
@@ -144,7 +146,7 @@ impl PacketData {
 
     pub fn bin_deserialize(data: &[u8]) -> Result<Self, String> {
         let (data, _size) = bincode::serde::decode_from_slice(data, bincode_config())
-            .map_err(|_| "Failed to decode packet".to_string())?;
+            .map_err(|err| format!("Failed to deserialize packet data: {}", err))?;
         data
     }
 

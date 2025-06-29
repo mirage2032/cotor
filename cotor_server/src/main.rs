@@ -1,14 +1,19 @@
+use cotor_core::network::packet::NetworkPacket;
+use cotor_core::network::packet::AnyPacketData;
+use cotor_core::network::packet::PacketData;
 use tracing::event;
 use tracing_subscriber::filter::dynamic_filter_fn;
 use tracing_subscriber::fmt;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
+use cotor_core::network::packet::message::MessageData;
 
 mod server;
 mod clientconn;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let _ = std::any::TypeId::of::<MessageData>();
     //configure tracing to show all logs of all levels. Allow only coto
     const ROOT_SPAN_NAME: &str = "cotor_server";
     tracing_subscriber::registry()
@@ -39,8 +44,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .init();
     let span = tracing::info_span!(ROOT_SPAN_NAME);
     let _enter = span.enter();
-    let mut server = server::COTORServer::new().await?;
-    server.start().await?;
-    server.stop().await;
+
+    let message:Box<dyn AnyPacketData> = Box::new(MessageData::new_debug("Test message".to_string()));
+    let packet = PacketData::from(message);
+    let network_packet = packet.plain_encode()?;
+    let received_packet_data = PacketData::bin_deserialize(&network_packet.data)?;
+    //create a stream to write to and then be able to read from
+    // let mut stream = std::io::Cursor::new(Vec::new());
+    // network_packet.send(&mut stream).await?;
+    // stream.set_position(0); // Reset the cursor to the beginning of the stream
+    // let received_packet = NetworkPacket::from_stream(&mut stream).await?;
+    // let received_packet_data = PacketData::bin_deserialize(received_packet.data.as_slice())?;
+    println!("Received packet data: {:?}", received_packet_data);
+    // let mut server = server::COTORServer::new().await?;
+    // server.start().await?;
+    // server.stop().await;
     Ok(())
 }
