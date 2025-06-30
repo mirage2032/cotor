@@ -1,10 +1,12 @@
+use std::path::PathBuf;
 use crate::network::packet::AnyPacketData;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileTransferInitData {
-    pub file_location: String,
+    pub file_location: PathBuf,
+    pub total_chunks: u32,
     pub file_size: u32,
 }
 
@@ -17,11 +19,10 @@ pub struct FileTransferProgressData {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum FileTransferAction {
-    Request(FileTransferInitData),
+    Request(String),
     StartSend(FileTransferInitData),
     Progress(FileTransferProgressData),
     Error(String),
-    Ok,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

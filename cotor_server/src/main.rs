@@ -10,6 +10,7 @@ use tracing_subscriber::util::SubscriberInitExt;
 
 mod clientconn;
 mod server;
+mod handlers;
 
 const ROOT_SPAN_NAME: &str = "cotor_server";
 
