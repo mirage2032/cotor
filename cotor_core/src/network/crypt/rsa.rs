@@ -6,14 +6,14 @@ pub struct RSAPrivateKey {
 }
 
 impl RSAPrivateKey {
-    pub fn new() -> Result<Self, rsa::errors::Error> {
+    pub fn new() -> Result<Self, String> {
         let bits = 2048; // RSA key size
-        let private_key = RsaPrivateKey::new(&mut rand::rng(), bits)?;
+        let private_key = RsaPrivateKey::new(&mut rand::rng(), bits).map_err(|e| format!("Failed to generate RSA private key: {}", e))?;
         Ok(Self { private_key })
     }
 
-    pub fn decrypt(&self, data: &[u8]) -> Result<Vec<u8>, rsa::errors::Error> {
-        self.private_key.decrypt(Pkcs1v15Encrypt, data)
+    pub fn decrypt(&self, data: &[u8]) -> Result<Vec<u8>, String> {
+        self.private_key.decrypt(Pkcs1v15Encrypt, data).map_err(|e| format!("Decryption failed: {}", e))
     }
     
     pub fn public_key(&self) -> RSAPublicKey {

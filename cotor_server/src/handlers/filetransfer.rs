@@ -155,7 +155,7 @@ impl DownloadTask {
     }
 }
 
-    #[derive(Default, Debug)]
+#[derive(Default, Debug)]
 pub struct FileTransferTasks {
     pub upload_tasks: HashMap<Uuid, UploadTask>,
     pub download_tasks: HashMap<Uuid, DownloadTask>,
@@ -164,6 +164,7 @@ pub struct FileTransferTasks {
 impl FileTransferTasks {
 }
 
+#[derive(Debug,Default)]
 pub struct FileTransferHandler{
     cancel_token: CancellationToken,
     tasks: FileTransferTasks,
@@ -179,7 +180,7 @@ impl FileTransferHandler {
             // download_entries: HashMap::new(),
         }
     }
-    async fn handle(&mut self,file: &FileTransferPacketData) -> Result<(), String> {
+    pub async fn handle(&mut self,file: &FileTransferPacketData) -> Result<(), String> {
         match &file.action {
             FileTransferAction::Progress(progress_data)=>{
                 let download = self.tasks.download_tasks.remove(&file.transfer_id).

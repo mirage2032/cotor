@@ -112,22 +112,22 @@ impl NetworkPacket {
         Ok(())
     }
 
-    pub fn new_plain<'a>(packet_data: &impl EncodablePacket) -> Result<NetworkPacket, String> {
+    pub fn new_plain(packet_data: &impl EncodablePacket) -> Result<NetworkPacket, String> {
         packet_data.plain_encode()
             .map_err(|_| "Failed to encrypt packet with plain encoding".to_string())
     }
 
-    pub fn new_aes<'a>(packet_data: &impl EncodablePacket, key_chain: &KeyChain) -> Result<NetworkPacket, String> {
+    pub fn new_aes(packet_data: &impl EncodablePacket, key_chain: &KeyChain) -> Result<NetworkPacket, String> {
         packet_data.aes_encode(key_chain.aes_key.as_ref().ok_or("AES key not found in key chain")?)
             .map_err(|_| "Failed to encrypt packet with AES".to_string())
     }
 
-    pub fn new_rsa<'a>(packet_data: &impl EncodablePacket, key_chain: &KeyChain) -> Result<NetworkPacket, String> {
+    pub fn new_rsa(packet_data: &impl EncodablePacket, key_chain: &KeyChain) -> Result<NetworkPacket, String> {
         packet_data.rsa_encode(key_chain.rsa_public_key.as_ref().ok_or("RSA public key not found in key chain")?)
             .map_err(|_| "Failed to encrypt packet with RSA".to_string())
     }
 
-    pub fn new<'a>(packet_data: &impl EncodablePacket, encryption: PacketEncryption, key_chain: &KeyChain) -> Result<NetworkPacket, String> {
+    pub fn new(packet_data: &impl EncodablePacket, encryption: &PacketEncryption, key_chain: &KeyChain) -> Result<NetworkPacket, String> {
         match encryption {
             PacketEncryption::Plain => Self::new_plain(packet_data),
             PacketEncryption::AES => Self::new_aes(packet_data, key_chain),

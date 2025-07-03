@@ -1,21 +1,25 @@
 use arti_client::DataStream;
-use cotor_core::network::packet::NetworkPacket;
+use cotor_core::network::packet::{NetworkPacket, PacketEncryption};
 use std::ops::DerefMut;
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, RwLock};
 use tokio_util::sync::CancellationToken;
 use tracing::{event, instrument};
 use uuid::Uuid;
+use cotor_core::network::crypt::KeyChain;
+use crate::handlers::ClientHandlers;
 
-struct ClientConnTasks {
+struct ClientConnData {
     cancel_token: CancellationToken,
     packet_receiver: tokio::task::JoinHandle<Result<(), String>>,
     packet_sender: tokio::task::JoinHandle<Result<(), String>>,
     sender_queue_tx: tokio::sync::mpsc::Sender<NetworkPacket>,
 }
+
 pub struct ClientConnection {
     uuid: Uuid,
-    tasks: Option<ClientConnTasks>
+    tasks: Option<ClientConnData>,
+    handlers: ClientHandlers
 }
 
 impl ClientConnection {
@@ -32,19 +36,31 @@ impl ClientConnection {
         let con_kill_cb = async move |message| {
             event!(tracing::Level::INFO, "Killing connection with UUID: {} due to: {}", uuid, message);
             cancel_token_clone.cancel();
-            kill_cb.lock().await.take().map(|cb| cb(&uuid));
+            match kill_cb.lock().await.take(){
+                None => {
+                    event!(tracing::Level::ERROR, "Could not call kill callback for connection with UUID: {}. Might've already been called", uuid);
+                }
+                Some(cb) => {
+                    cb(&uuid).await;
+                    event!(tracing::Level::INFO, "Kill callback for connection with UUID: {} called successfully", uuid);
+                }
+            }
         };
         let stream = Arc::new(Mutex::new(stream));
         let receiver_task = tokio::spawn(Self::packet_receiver_task(stream.clone(), cancel_token.clone(),con_kill_cb.clone()));
         let (sender_queue_tx, sender_queue_rx) = tokio::sync::mpsc::channel(100); // Adjust the buffer size as needed it might be too big
         let sender_task = tokio::spawn(Self::packet_sender_task(stream.clone(), cancel_token.clone(), sender_queue_rx,con_kill_cb));
-        let tasks = Some(ClientConnTasks {
-            cancel_token,
+        let tasks = Some(ClientConnData {
+            cancel_token: cancel_token.clone(),
             packet_receiver: receiver_task,
             packet_sender: sender_task,
-            sender_queue_tx,
+            sender_queue_tx: sender_queue_tx.clone(),
         });
-        Self {uuid, tasks}
+        let handlers = ClientHandlers::new(
+            cancel_token,
+            sender_queue_tx,
+        );
+        Self {uuid,tasks,handlers}
     }
 
     pub fn uuid(&self) -> Uuid {

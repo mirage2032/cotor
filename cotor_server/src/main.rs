@@ -7,6 +7,8 @@ use tracing_subscriber::filter::dynamic_filter_fn;
 use tracing_subscriber::fmt;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
+use cotor_core::network::packet::aes::AESPacketData;
+use cotor_core::network::packet::rsa::RSAPacketData;
 
 mod clientconn;
 mod server;
@@ -47,21 +49,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let span = tracing::info_span!(ROOT_SPAN_NAME);
     let _enter = span.enter();
 
-    let mut key_chain = KeyChain::default();
-    key_chain.aes_key = Some(AESKey::new()?);
-    let rsa_private_key = RSAPrivateKey::new()?;
-    let rsa_public_key = rsa_private_key.public_key();
-    key_chain.rsa_private_key = Some(rsa_private_key);
-    key_chain.rsa_public_key = Some(rsa_public_key);
+    let key_chain = KeyChain::new().expect("Failed to create key chain");
 
     let message = MessageData::new_debug("Test message".to_string());
-    let network_packet = NetworkPacket::new(&message, PacketEncryption::RSA, &key_chain)?;
+    let aes_packet = AESPacketData::AESKey(*key_chain.aes_key.as_ref().expect("AES key not set"));
+
+    let network_packet = NetworkPacket::new(&aes_packet, &PacketEncryption::RSA, &key_chain)?;
     let mut stream = std::io::Cursor::new(Vec::new());
     network_packet.send(&mut stream).await?;
     stream.set_position(0); // Reset the cursor to the beginning of the stream
     let received_packet = NetworkPacket::from_stream(&mut stream).await?;
     let received_packet_data = received_packet.decrypt(&key_chain)?;
-    println!("Received packet data: {:?}", received_packet_data);
+    println!("Received packet data: {received_packet_data:?}");
     // let mut server = server::COTORServer::new().await?;
     // server.start().await?;
     // server.stop().await;
