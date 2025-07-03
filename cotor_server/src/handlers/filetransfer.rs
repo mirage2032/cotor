@@ -247,7 +247,7 @@ pub struct FileTransferTasks {
 }
 
 impl FileTransferTasks {}
-
+#[derive(Debug)]
 pub struct FileTransferHandler {
     cancel_token: CancellationToken,
     tasks: FileTransferTasks,

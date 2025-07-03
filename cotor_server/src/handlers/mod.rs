@@ -1,6 +1,7 @@
 mod filetransfer;
 mod screenshot;
 
+use std::any::TypeId;
 use crate::handlers::filetransfer::FileTransferHandler;
 use crate::handlers::screenshot::ScreenshotHandler;
 use cotor_core::network::crypt::KeyChain;
@@ -17,11 +18,14 @@ use tokio_util::sync::CancellationToken;
 use tracing::event;
 use uuid::Uuid;
 
+#[derive(Debug)]
+
 struct EncryptionData {
     key_chain: KeyChain, // Assuming KeyChain is defined elsewhere in your codebase
     encryption_type: PacketEncryption,
 }
 
+#[derive(Debug)]
 pub struct ClientHandlers {
     cancel_token: CancellationToken,
 
@@ -89,22 +93,32 @@ impl ClientHandlers {
 
     pub async fn handle_packet(&mut self, packet: &NetworkPacket) -> Result<(), String> {
         let packet_data = packet.decrypt(&self.encryption_data.read().await.key_chain)?;
-        let packet_any = packet_data.as_any_box();
+        let any_box = packet_data.as_any_box();
 
-        if packet_any.is::<RSAPacketData>() {
-            let rsa_packet = packet_any.downcast::<RSAPacketData>().unwrap();
-            self.handle_rsa_packet(*rsa_packet).await?;
-        } else if packet_any.is::<FileTransferPacketData>() {
-            let file_packet = packet_any.downcast::<FileTransferPacketData>().unwrap();
-            self.file_transfer.handle(&file_packet).await?;
-        } else if packet_any.is::<MessageData>() {
-            let message_packet = packet_any.downcast::<MessageData>().unwrap();
-            let level = message_packet.level();
-            let message = message_packet.message();
-            event!(tracing::Level::INFO,"Received message level {level} : {message}");
-        } else if packet_any.is::<ScreenShotPacketData>() {
-            let screenshot_packet = packet_any.downcast::<ScreenShotPacketData>().unwrap();
-            self.screenshot.handle(*screenshot_packet).await?;
+        match any_box.type_id() {
+            id if id == TypeId::of::<RSAPacketData>() => {
+                let rsa_packet = any_box.downcast::<RSAPacketData>().unwrap();
+                self.handle_rsa_packet(*rsa_packet).await?;
+            }
+            id if id == TypeId::of::<FileTransferPacketData>() => {
+                let file_packet = any_box.downcast::<FileTransferPacketData>().unwrap();
+                self.file_transfer.handle(&file_packet).await?;
+            }
+            id if id == TypeId::of::<MessageData>() => {
+                let message_packet = any_box.downcast::<MessageData>().unwrap();
+                let level = message_packet.level();
+                let message = message_packet.message();
+                event!(
+            tracing::Level::INFO,
+            "Received message level {level} : {message}"
+        );
+            }
+            id if id == TypeId::of::<ScreenShotPacketData>() => {
+                let screenshot_packet = any_box.downcast::<ScreenShotPacketData>().unwrap();
+                self.screenshot.handle(*screenshot_packet).await?;
+            }
+            _ => { event!(tracing::Level::WARN,"Received unknown packet type: {:?}",any_box.type_id());
+            }
         }
         Ok(())
     }

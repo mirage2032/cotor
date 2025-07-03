@@ -6,9 +6,10 @@ use std::ops::DerefMut;
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
 use tokio_util::sync::CancellationToken;
-use tracing::{event, instrument};
+use tracing::{event, instrument, Instrument, Span};
 use uuid::Uuid;
 
+#[derive(Debug)]
 struct ClientConnData {
     cancel_token: CancellationToken,
     packet_receiver: tokio::task::JoinHandle<Result<(), String>>,
@@ -16,6 +17,8 @@ struct ClientConnData {
     sender_queue_tx: tokio::sync::mpsc::Sender<NetworkPacket>,
 }
 
+
+#[derive(Debug)]
 pub struct ClientConnection {
     uuid: Uuid,
     tasks: Option<ClientConnData>,

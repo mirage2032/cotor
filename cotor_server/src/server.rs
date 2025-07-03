@@ -84,7 +84,7 @@ impl COTORServer {
                                                 let id = *id;
                                                 let connected_clients_clone = connected_clients_clone.clone();
                                                 Box::pin(async move {
-                                                    connected_clients_clone.lock().await.remove(&id);//TODO:LEFT HERE
+                                                    connected_clients_clone.lock().await.remove(&id);
                                                 })
                                             }
                                         );

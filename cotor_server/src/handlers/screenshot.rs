@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use crate::handlers::EncryptionData;
 use arti_client::isolation::Isolation;
 use chrono::Utc;
@@ -10,8 +11,13 @@ use tempfile::TempDir;
 use tokio::sync::RwLock;
 use tracing::event;
 
+trait SaveDir: AsRef<Path> + Send + Sync + Debug {}
+impl SaveDir for PathBuf {}
+impl SaveDir for TempDir {}
+
+#[derive(Debug)]
 pub struct ScreenshotHandler {
-    save_dir: Box<dyn AsRef<Path> + Send + Sync>,
+    save_dir: Box<dyn SaveDir>,
     suffix: String,
 }
 impl ScreenshotHandler {
