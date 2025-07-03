@@ -12,7 +12,7 @@ pub struct KeyChain {
 }
 
 impl KeyChain {
-    pub fn new() -> Result<Self,String> {
+    pub fn new() -> Result<Self, String> {
         let aes_key = AESKey::new()?;
         let rsa_private_key = RSAPrivateKey::new()?;
         let rsa_public_key = rsa_private_key.public_key();
@@ -45,4 +45,3 @@ impl KeyChain {
         Ok(key_chain)
     }
 }
-

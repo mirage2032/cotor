@@ -38,16 +38,17 @@ impl AESKey {
     }
 
     pub fn decrypt(&self, data: &[u8]) -> Result<Vec<u8>, String> {
-        let nonce = data.get(0..12)
+        let nonce = data
+            .get(0..12)
             .ok_or("Data too short for nonce")?
             .try_into()
             .map_err(|_| "Invalid nonce length")?;
-        let ciphertext = data.get(12..)
-            .ok_or("Data too short for ciphertext")?;
+        let ciphertext = data.get(12..).ok_or("Data too short for ciphertext")?;
         let key: &Key<Aes256Gcm> = (&self.key).into();
         let cipher = Aes256Gcm::new(key);
         let plaintext = cipher
-            .decrypt(nonce, ciphertext).map_err(|err| err.to_string())?;
+            .decrypt(nonce, ciphertext)
+            .map_err(|err| err.to_string())?;
         Ok(plaintext)
     }
 }

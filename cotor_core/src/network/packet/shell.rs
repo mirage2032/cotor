@@ -12,13 +12,16 @@ pub enum ShellPacketAction {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ShellPacketData{
+pub struct ShellPacketData {
     pub shell_id: Uuid,
     pub action: ShellPacketAction,
 }
 #[typetag::serde]
 impl AnyPacketData for ShellPacketData {
     fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn as_any_box(self: Box<Self>) -> Box<dyn std::any::Any + Send + Sync> {
         self
     }
 }

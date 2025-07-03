@@ -8,14 +8,17 @@ pub struct RSAPrivateKey {
 impl RSAPrivateKey {
     pub fn new() -> Result<Self, String> {
         let bits = 2048; // RSA key size
-        let private_key = RsaPrivateKey::new(&mut rand::rng(), bits).map_err(|e| format!("Failed to generate RSA private key: {}", e))?;
+        let private_key = RsaPrivateKey::new(&mut rand::rng(), bits)
+            .map_err(|e| format!("Failed to generate RSA private key: {}", e))?;
         Ok(Self { private_key })
     }
 
     pub fn decrypt(&self, data: &[u8]) -> Result<Vec<u8>, String> {
-        self.private_key.decrypt(Pkcs1v15Encrypt, data).map_err(|e| format!("Decryption failed: {}", e))
+        self.private_key
+            .decrypt(Pkcs1v15Encrypt, data)
+            .map_err(|e| format!("Decryption failed: {}", e))
     }
-    
+
     pub fn public_key(&self) -> RSAPublicKey {
         RSAPublicKey::from_private_key(self)
     }
@@ -35,7 +38,8 @@ impl RSAPublicKey {
 
     pub fn encrypt(&self, data: &[u8]) -> Result<Vec<u8>, &'static str> {
         self.public_key
-            .encrypt(&mut rand::rng(), Pkcs1v15Encrypt, data).map_err(|_| "Encryption failed")
+            .encrypt(&mut rand::rng(), Pkcs1v15Encrypt, data)
+            .map_err(|_| "Encryption failed")
     }
 }
 

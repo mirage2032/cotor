@@ -1,6 +1,7 @@
-use std::collections::HashMap;
+use crate::clientconn::ClientConnection;
 use arti_client::{TorClient, TorClientConfig};
 use futures_util::{Stream, StreamExt};
+use std::collections::HashMap;
 use std::error::Error;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -9,9 +10,8 @@ use tor_cell::relaycell::msg::Connected;
 use tor_hsservice::config::OnionServiceConfigBuilder;
 use tor_hsservice::{RendRequest, RunningOnionService};
 use tor_rtcompat::PreferredRuntime;
-use tracing::{event, info_span, instrument, Instrument};
+use tracing::{Instrument, event, info_span, instrument};
 use uuid::Uuid;
-use crate::clientconn::ClientConnection;
 
 pub struct COTORServer {
     tor_client: TorClient<PreferredRuntime>,
@@ -46,7 +46,11 @@ impl COTORServer {
                 .build()?,
         )?;
         if let Some(onion_address) = onion_service.onion_address() {
-            event!(tracing::Level::INFO, "Onion service launched with address: {}", onion_address);
+            event!(
+                tracing::Level::INFO,
+                "Onion service launched with address: {}",
+                onion_address
+            );
         } else {
             return Err("Failed to get onion address".into());
         }
@@ -84,8 +88,16 @@ impl COTORServer {
                                                 })
                                             }
                                         );
-                                        event!(tracing::Level::INFO, "Established client connection: {:?}", client_conn.uuid());
-                                        connected_clients.lock().await.insert(client_conn.uuid(), client_conn);
+                                        match client_conn {
+                                            Ok(client_conn) => {
+                                                event!(tracing::Level::INFO, "Client connection established: {:?}", client_conn.uuid());
+                                                connected_clients.lock().await.insert(client_conn.uuid(), client_conn);
+                                            }
+                                            Err(e) => {
+                                                event!(tracing::Level::WARN, "Failed to create client connection: {}", e);
+                                                continue;
+                                            }
+                                        }
                                     }
                                     Err(e) => {
                                         event!(tracing::Level::WARN, "Failed to connect to client: {}", e);
@@ -108,7 +120,8 @@ impl COTORServer {
         event!(tracing::Level::INFO, "Starting COTOR Server...");
         let rend_requests = self.start_service().await?;
         event!(tracing::Level::INFO, "Starting accepting connections...");
-        self.start_acceptor(rend_requests,self.client_connections.clone()).await;
+        self.start_acceptor(rend_requests, self.client_connections.clone())
+            .await;
         event!(tracing::Level::INFO, "Waiting for connections...");
         Ok(())
     }

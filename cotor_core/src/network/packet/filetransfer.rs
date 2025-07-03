@@ -1,6 +1,6 @@
-use std::path::PathBuf;
 use crate::network::packet::AnyPacketData;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -34,6 +34,9 @@ pub struct FileTransferPacketData {
 #[typetag::serde]
 impl AnyPacketData for FileTransferPacketData {
     fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn as_any_box(self: Box<Self>) -> Box<dyn std::any::Any + Send + Sync> {
         self
     }
 }

@@ -13,4 +13,7 @@ impl AnyPacketData for RSAPacketData {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
+    fn as_any_box(self: Box<Self>) -> Box<dyn std::any::Any + Send + Sync> {
+        self
+    }
 }
