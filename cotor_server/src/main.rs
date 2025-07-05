@@ -1,3 +1,5 @@
+use tokio::io;
+use tokio::io::{AsyncBufReadExt, BufReader};
 use cotor_core::network::crypt::KeyChain;
 use cotor_core::network::crypt::aes::AESKey;
 use cotor_core::network::crypt::rsa::RSAPrivateKey;
@@ -49,20 +51,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let span = tracing::info_span!(ROOT_SPAN_NAME);
     let _enter = span.enter();
 
-    let key_chain = KeyChain::new().expect("Failed to create key chain");
-
-    let message = MessageData::new_debug("Test message".to_string());
-    let aes_packet = AESPacketData::AESKey(*key_chain.aes_key.as_ref().expect("AES key not set"));
-
-    let network_packet = NetworkPacket::new(&aes_packet, &PacketEncryption::RSA, &key_chain)?;
-    let mut stream = std::io::Cursor::new(Vec::new());
-    network_packet.send(&mut stream).await?;
-    stream.set_position(0); // Reset the cursor to the beginning of the stream
-    let received_packet = NetworkPacket::from_stream(&mut stream).await?;
-    let received_packet_data = received_packet.decrypt(&key_chain)?;
-    println!("Received packet data: {received_packet_data:?}");
-    // let mut server = server::COTORServer::new().await?;
-    // server.start().await?;
-    // server.stop().await;
+    // let key_chain = KeyChain::new().expect("Failed to create key chain");
+    //
+    // let message = MessageData::new_debug("Test message".to_string());
+    // let aes_packet = AESPacketData::AESKey(*key_chain.aes_key.as_ref().expect("AES key not set"));
+    //
+    // let network_packet = NetworkPacket::new(&aes_packet, &PacketEncryption::RSA, &key_chain)?;
+    // let mut stream = std::io::Cursor::new(Vec::new());
+    // network_packet.send(&mut stream).await?;
+    // stream.set_position(0); // Reset the cursor to the beginning of the stream
+    // let received_packet = NetworkPacket::from_stream(&mut stream).await?;
+    // let received_packet_data = received_packet.decrypt(&key_chain)?;
+    // println!("Received packet data: {received_packet_data:?}");
+    let mut server = server::COTORServer::new().await?;
+    server.start().await?;
+    //async wait for keyboard new line
+    println!("Server is running. Press Enter to stop...");
+    let mut input = String::new();
+    let mut reader = BufReader::new(io::stdin());
+    while input != "stop\n" {
+        input.clear();
+        reader.read_line(&mut input).await?;
+    }
+    tracing::info!("Stopping server...");
+    server.stop().await;
     Ok(())
 }

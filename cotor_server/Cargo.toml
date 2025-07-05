@@ -10,6 +10,7 @@ serde.workspace = true
 uuid.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+tokio-util.workspace = true
 image = "0.25.6"
 chrono = "0.4.41"
 tempfile = "3.20.0"
@@ -20,4 +21,3 @@ arti-client = { version = "0.31.0", features = ["tokio","onion-service-service",
 tor-hsservice = "0.31.0"
 tor-rtcompat = { version="0.31.0",features = ["tokio"] }
 tor-cell = {version = "0.31.0"}
-tokio-util = "0.7.15"

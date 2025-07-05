@@ -13,7 +13,10 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::fmt::Debug;
+use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::sync::Mutex;
+use tokio_util::sync::CancellationToken;
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub enum PacketEncryption {
@@ -97,6 +100,48 @@ impl NetworkPacket {
             data: data_bytes,
         })
     }
+
+    pub async fn from_stream_with_cancel<R: AsyncReadExt + Unpin>(
+        stream: Arc<Mutex<R>>,
+        cancel_token: CancellationToken,
+    ) -> Result<NetworkPacket, String> {
+        async fn read_exact_with_cancel<R: AsyncReadExt + Unpin>(
+            stream: &Arc<Mutex<R>>,
+            buf: &mut [u8],
+            cancel_token: &CancellationToken,
+        ) -> Result<(), String> {
+            let mut read = 0;
+            while read < buf.len() {
+                tokio::select! {
+                    n = async {
+                        let mut guard = stream.lock().await;
+                        guard.read(&mut buf[read..]).await
+                    } => {
+                        match n {
+                            Ok(0) => return Err("EOF reached".to_string()),
+                            Ok(n) => read += n,
+                            Err(e) => return Err(format!("Read error: {e}")),
+                        }
+                    }
+                    _ = cancel_token.cancelled() => {
+                        return Err("Packet reading cancelled".to_string());
+                    }
+                }
+            }
+            Ok(())
+        }
+
+        let mut header_bytes = vec![0u8; PACKET_HEADER_SIZE];
+        read_exact_with_cancel(&stream, &mut header_bytes, &cancel_token).await?;
+        let header = PacketHeader::from_vec(&header_bytes)?;
+        let mut data_bytes = vec![0u8; header.size as usize];
+        read_exact_with_cancel(&stream, &mut data_bytes, &cancel_token).await?;
+        Ok(NetworkPacket {
+            header,
+            data: data_bytes,
+        })
+    }
+
     pub async fn send<W: AsyncWriteExt + Unpin>(&self, stream: &mut W) -> Result<(), String> {
         let mut send_buffer = Vec::with_capacity(PACKET_HEADER_SIZE + self.data.len());
         let header_bytes = self

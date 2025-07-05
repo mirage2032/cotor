@@ -84,7 +84,11 @@ impl COTORServer {
                                                 let id = *id;
                                                 let connected_clients_clone = connected_clients_clone.clone();
                                                 Box::pin(async move {
+                                                    if let Some(conn) = connected_clients_clone.lock().await.get_mut(&id){
+                                                        conn.close().await;
+                                                    }
                                                     connected_clients_clone.lock().await.remove(&id);
+                                                    event!(tracing::Level::INFO, "Removed client: {}", id);
                                                 })
                                             }
                                         );
@@ -129,6 +133,18 @@ impl COTORServer {
     #[instrument(skip(self))]
     pub async fn stop(&mut self) {
         self.cancel_token.cancel();
+        if let Some(handle) = self.acceptor_handle.take()
+            && let Err(e) = handle.await
+        {
+            event!(
+                tracing::Level::ERROR,
+                "Error while stopping acceptor: {}",
+                e
+            );
+        }
+        for (_, client) in self.client_connections.lock().await.iter_mut() {
+            client.close().await;
+        }
         event!(tracing::Level::INFO, "COTOR Server stopped.");
     }
 }
@@ -136,5 +152,8 @@ impl COTORServer {
 impl Drop for COTORServer {
     fn drop(&mut self) {
         self.cancel_token.cancel();
+        if let Some(handle) = self.acceptor_handle.take() {
+            handle.abort();
+        }
     }
 }

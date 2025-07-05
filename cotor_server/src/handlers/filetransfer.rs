@@ -13,7 +13,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader, BufWriter};
 use tokio::sync::RwLock;
 use tokio_tar::Builder;
 use tokio_util::sync::CancellationToken;
-use tracing::event;
+use tracing::{Instrument, Span, event, span};
 use uuid::Uuid;
 
 #[derive(Debug, Copy, Clone)]
@@ -33,7 +33,7 @@ pub struct UploadTask {
     pub data: FileTransferData,
     pub cancel_token: CancellationToken,
     pub progress: Arc<RwLock<TransferProgress>>,
-    pub task: tokio::task::JoinHandle<Result<(), String>>,
+    pub task: Option<tokio::task::JoinHandle<Result<(), String>>>,
 }
 
 impl UploadTask {
@@ -43,7 +43,6 @@ impl UploadTask {
         sender_queue_tx: tokio::sync::mpsc::Sender<NetworkPacket>,
         enc_data: Weak<RwLock<EncryptionData>>,
     ) -> Result<(Self, Uuid), String> {
-        //combine as path source and name
         let transfer_id = Uuid::new_v4();
         let temp_file =
             NamedTempFile::new().map_err(|e| format!("Failed to create temp file: {}", e))?;
@@ -94,48 +93,79 @@ impl UploadTask {
             total_chunks,
         }));
         let progress_clone = progress.clone();
-        let task = tokio::spawn(async move {
-            let mut chunk_number = 0;
-            while !cancel_token_clone.is_cancelled() {
-                let mut data = vec![0; CHUNK_SIZE as usize];
-                let bytes_read = buf
-                    .read(&mut data)
-                    .await
-                    .map_err(|e| format!("Failed to read from file: {}", e))?;
-                if bytes_read == 0 {
-                    break; // EOF
+        let task = tokio::spawn(
+            async move {
+                let mut chunk_number = 0;
+                while !cancel_token_clone.is_cancelled() {
+                    let mut data = vec![0; CHUNK_SIZE as usize];
+                    let bytes_read = buf
+                        .read(&mut data)
+                        .await
+                        .map_err(|e| format!("Failed to read from file: {}", e))?;
+                    if bytes_read == 0 {
+                        break; // EOF
+                    }
+                    let progress = FileTransferPacketData {
+                        transfer_id,
+                        action: FileTransferAction::Progress(FileTransferProgressData {
+                            chunk_number,
+                            total_chunks,
+                            data,
+                        }),
+                    };
+                    let progress_packet = NetworkPacket::new(
+                        &progress,
+                        &enc_data.read().await.encryption_type,
+                        &enc_data.read().await.key_chain,
+                    )?;
+                    sender_queue_tx
+                        .send(progress_packet)
+                        .await
+                        .map_err(|e| format!("Failed to send progress packet: {}", e))?;
+                    progress_clone.write().await.chunk_number = chunk_number;
+                    chunk_number += 1;
                 }
-                let progress = FileTransferPacketData {
-                    transfer_id,
-                    action: FileTransferAction::Progress(FileTransferProgressData {
-                        chunk_number,
-                        total_chunks,
-                        data,
-                    }),
-                };
-                let progress_packet = NetworkPacket::new(
-                    &progress,
-                    &enc_data.read().await.encryption_type,
-                    &enc_data.read().await.key_chain,
-                )?;
-                sender_queue_tx
-                    .send(progress_packet)
-                    .await
-                    .map_err(|e| format!("Failed to send progress packet: {}", e))?;
-                progress_clone.write().await.chunk_number = chunk_number;
-                chunk_number += 1;
+                Ok(())
             }
-            Ok(())
-        });
+            .instrument(span!(tracing::Level::INFO, "upload_task", transfer_id = %transfer_id)),
+        );
         Ok((
             UploadTask {
                 data,
                 cancel_token,
                 progress,
-                task,
+                task: Some(task),
             },
             transfer_id,
         ))
+    }
+
+    pub async fn close(&mut self) {
+        event!(
+            tracing::Level::INFO,
+            "Closing upload task for transfer ID: {}",
+            self.data.source.display()
+        );
+        self.cancel_token.cancel();
+        if let Some(task) = self.task.take()
+            && let Err(e) = task.await
+        {
+            event!(tracing::Level::ERROR, "Failed to await upload task: {}", e);
+        }
+    }
+}
+
+impl Drop for UploadTask {
+    fn drop(&mut self) {
+        self.cancel_token.cancel();
+        if let Some(task) = self.task.take() {
+            event!(
+                tracing::Level::INFO,
+                "Dropping UploadTask for transfer ID: {}",
+                self.data.source.display()
+            );
+            task.abort();
+        }
     }
 }
 
@@ -246,7 +276,13 @@ pub struct FileTransferTasks {
     pub download_tasks: HashMap<Uuid, DownloadTask>,
 }
 
-impl FileTransferTasks {}
+impl FileTransferTasks {
+    pub async fn close(&mut self) {
+        for (_, task) in self.upload_tasks.iter_mut() {
+            task.close().await;
+        }
+    }
+}
 #[derive(Debug)]
 pub struct FileTransferHandler {
     cancel_token: CancellationToken,
@@ -311,5 +347,24 @@ impl FileTransferHandler {
             DownloadTask::new(data, self.sender_queue_tx.clone(), self.enc_data.clone()).await?;
         self.tasks.download_tasks.insert(transfer_id, task);
         Ok(transfer_id)
+    }
+
+    pub async fn close(&mut self) {
+        event!(
+            tracing::Level::INFO,
+            "Closing FileTransferHandler. Cancelling all tasks."
+        );
+        self.cancel_token.cancel();
+        self.tasks.close().await;
+    }
+}
+
+impl Drop for FileTransferHandler {
+    fn drop(&mut self) {
+        event!(
+            tracing::Level::INFO,
+            "Dropping FileTransferHandler. Cancelling all tasks."
+        );
+        self.cancel_token.cancel();
     }
 }
