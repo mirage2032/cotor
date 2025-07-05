@@ -26,7 +26,7 @@ pub struct ClientConnection {
 }
 
 impl ClientConnection {
-    #[instrument(name = "new_conn", skip(stream, cancel_token, kill_cb))]
+    #[instrument(name = "new_conn", skip(stream, cancel_token, kill_cb),fields(uuid))]
     pub fn new<F, Fut>(
         stream: DataStream,
         cancel_token: CancellationToken,
@@ -37,18 +37,17 @@ impl ClientConnection {
         Fut: Future<Output = ()> + Send + 'static,
     {
         let uuid = Uuid::new_v4();
+        tracing::Span::current().record("uuid", uuid.to_string());
         event!(
             tracing::Level::INFO,
-            "Starting connection with UUID: {}",
-            uuid
+            "Starting connection"
         );
         let kill_cb = Arc::new(Mutex::new(Some(kill_cb)));
         let cancel_token_clone = cancel_token.clone();
         let con_kill_cb = async move |message| {
             event!(
                 tracing::Level::INFO,
-                "Killing connection with UUID: {} due to: {}",
-                uuid,
+                "Killing connection due to: {}",
                 message
             );
             cancel_token_clone.cancel();
@@ -56,8 +55,7 @@ impl ClientConnection {
                 None => {
                     event!(
                         tracing::Level::ERROR,
-                        "Could not call kill callback for connection with UUID: {}. Might've already been called",
-                        uuid
+                        "Could not call kill callback for connection. Might've already been called"
                     );
                 }
                 Some(cb) => {
@@ -66,8 +64,7 @@ impl ClientConnection {
                     ));
                     event!(
                         tracing::Level::INFO,
-                        "Kill callback for connection with UUID: {} called successfully",
-                        uuid
+                        "Kill callback for connection called successfully"
                     );
                 }
             }
@@ -85,7 +82,7 @@ impl ClientConnection {
             cancel_token.clone(),
             con_kill_cb.clone(),
         ).instrument(
-            span!(tracing::Level::INFO, "packet_receiver_task", uuid = %uuid),
+            span!(tracing::Level::INFO, "packet_receiver_task"),
         ));
         let sender_task = tokio::spawn(Self::packet_sender_task(
             stream.clone(),
@@ -93,7 +90,7 @@ impl ClientConnection {
             sender_queue_rx,
             con_kill_cb,
         ).instrument(
-            span!(tracing::Level::INFO, "packet_sender_task", uuid = %uuid),
+            span!(tracing::Level::INFO, "packet_sender_task"),
         ));
         let tasks = Some(ClientConnData {
             cancel_token,

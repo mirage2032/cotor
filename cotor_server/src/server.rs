@@ -88,7 +88,7 @@ impl COTORServer {
                                                         conn.close().await;
                                                     }
                                                     connected_clients_clone.lock().await.remove(&id);
-                                                    event!(tracing::Level::INFO, "Removed client: {}", id);
+                                                    event!(tracing::Level::INFO, "Removed client");
                                                 })
                                             }
                                         );

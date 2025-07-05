@@ -94,7 +94,7 @@ impl NetworkPacket {
         stream
             .read_exact(&mut data_bytes)
             .await
-            .map_err(|err| format!("Failed to read packet data: {}", err))?;
+            .map_err(|err| format!("Failed to read packet data: {err}"))?;
         Ok(NetworkPacket {
             header,
             data: data_bytes,
