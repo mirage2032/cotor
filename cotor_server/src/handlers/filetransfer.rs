@@ -3,7 +3,7 @@ use async_compression::tokio::write::GzipEncoder;
 use cotor_core::network::crypt::KeyChain;
 use cotor_core::network::packet::NetworkPacket;
 use cotor_core::network::packet::filetransfer::{
-    FileTransferAction, FileTransferInitData, FileTransferPacketData, FileTransferProgressData,
+    FileTransferAction, FileTransferInitData, FileTransferPacket, FileTransferProgressData,
 };
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -69,7 +69,7 @@ impl UploadTask {
             .len() as u32;
         let total_chunks = file_size.div_ceil(CHUNK_SIZE);
         let mut buf = BufReader::new(file);
-        let upload_init = FileTransferPacketData {
+        let upload_init = FileTransferPacket {
             transfer_id,
             action: FileTransferAction::StartSend(FileTransferInitData {
                 file_location: data.destination.clone(),
@@ -105,7 +105,7 @@ impl UploadTask {
                     if bytes_read == 0 {
                         break; // EOF
                     }
-                    let progress = FileTransferPacketData {
+                    let progress = FileTransferPacket {
                         transfer_id,
                         action: FileTransferAction::Progress(FileTransferProgressData {
                             chunk_number,
@@ -189,7 +189,7 @@ impl DownloadTask {
             .await
             .map_err(|e| format!("Failed to create file: {}", e))?;
         let buf = BufWriter::new(file);
-        let download_request = FileTransferPacketData {
+        let download_request = FileTransferPacket {
             transfer_id,
             action: FileTransferAction::Request(
                 data.source
@@ -305,7 +305,7 @@ impl FileTransferHandler {
             enc_data,
         }
     }
-    pub async fn handle(&mut self, file: &FileTransferPacketData) -> Result<(), String> {
+    pub async fn handle(&mut self, file: &FileTransferPacket) -> Result<(), String> {
         match &file.action {
             FileTransferAction::Progress(progress_data) => {
                 let download = self

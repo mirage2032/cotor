@@ -1,4 +1,4 @@
-use crate::network::packet::AnyPacketData;
+use crate::network::packet::AnyPacket;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -133,14 +133,14 @@ pub struct KeyLogData {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum KeyLogPacketData {
+pub enum KeyLogPacket {
     Start,
     Data(KeyLogData),
     Stop,
 }
 
 #[typetag::serde]
-impl AnyPacketData for KeyLogPacketData {
+impl AnyPacket for KeyLogPacket {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

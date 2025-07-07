@@ -1,4 +1,4 @@
-use crate::network::packet::AnyPacketData;
+use crate::network::packet::AnyPacket;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -8,13 +8,13 @@ pub struct ScreenShotImage {
     pub buffer: Vec<u8>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum ScreenShotPacketData {
+pub enum ScreenShotPacket {
     Request,
     Response(Vec<ScreenShotImage>),
 }
 
 #[typetag::serde]
-impl AnyPacketData for ScreenShotPacketData {
+impl AnyPacket for ScreenShotPacket {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

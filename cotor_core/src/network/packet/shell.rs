@@ -1,4 +1,4 @@
-use crate::network::packet::AnyPacketData;
+use crate::network::packet::AnyPacket;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -12,12 +12,12 @@ pub enum ShellPacketAction {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ShellPacketData {
+pub struct ShellPacket {
     pub shell_id: Uuid,
     pub action: ShellPacketAction,
 }
 #[typetag::serde]
-impl AnyPacketData for ShellPacketData {
+impl AnyPacket for ShellPacket {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

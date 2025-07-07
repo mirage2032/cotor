@@ -1,11 +1,5 @@
 use tokio::io;
 use tokio::io::{AsyncBufReadExt, BufReader};
-use cotor_core::network::crypt::KeyChain;
-use cotor_core::network::crypt::aes::AESKey;
-use cotor_core::network::crypt::rsa::RSAPrivateKey;
-use cotor_core::network::packet::aes::AESPacketData;
-use cotor_core::network::packet::message::MessageData;
-use cotor_core::network::packet::rsa::RSAPacketData;
 use cotor_core::network::packet::{NetworkPacket, PacketEncryption};
 use tracing_subscriber::filter::dynamic_filter_fn;
 use tracing_subscriber::fmt;
@@ -69,7 +63,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Server is running. Press Enter to stop...");
     let mut input = String::new();
     let mut reader = BufReader::new(io::stdin());
-    while input != "stop\n" {
+    while input != "stop" {
         input.clear();
         reader.read_line(&mut input).await?;
     }

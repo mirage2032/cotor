@@ -3,7 +3,7 @@ use crate::handlers::EncryptionData;
 use arti_client::isolation::Isolation;
 use chrono::Utc;
 use cotor_core::network::packet::NetworkPacket;
-use cotor_core::network::packet::screenshot::ScreenShotPacketData;
+use cotor_core::network::packet::screenshot::ScreenShotPacket;
 use image::{ImageBuffer, Rgba};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -58,7 +58,7 @@ impl ScreenshotHandler {
         enc_data: Arc<RwLock<EncryptionData>>,
     ) -> Result<(), String> {
         let packet = NetworkPacket::new(
-            &ScreenShotPacketData::Request,
+            &ScreenShotPacket::Request,
             &enc_data.read().await.encryption_type,
             &enc_data.read().await.key_chain,
         )?;
@@ -69,9 +69,9 @@ impl ScreenshotHandler {
         Ok(())
     }
 
-    pub async fn handle(&self, packet: ScreenShotPacketData) -> Result<(), String> {
+    pub async fn handle(&self, packet: ScreenShotPacket) -> Result<(), String> {
         match packet {
-            ScreenShotPacketData::Response(images) => {
+            ScreenShotPacket::Response(images) => {
                 for (index, image) in images.into_iter().enumerate() {
                     let timestamp = Utc::now().format("%Y%m%d_%H%M%S").to_string();
                     let file_name = format!("screenshot_{timestamp}_{index}_{}.png", self.suffix);
@@ -96,7 +96,7 @@ impl ScreenshotHandler {
                     }
                 }
             }
-            ScreenShotPacketData::Request => {
+            ScreenShotPacket::Request => {
                 event!(tracing::Level::INFO, "Client cannot request screenshot");
             }
         }

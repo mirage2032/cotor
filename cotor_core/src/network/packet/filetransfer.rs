@@ -1,4 +1,4 @@
-use crate::network::packet::AnyPacketData;
+use crate::network::packet::AnyPacket;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use uuid::Uuid;
@@ -26,13 +26,13 @@ pub enum FileTransferAction {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FileTransferPacketData {
+pub struct FileTransferPacket {
     pub transfer_id: Uuid,
     pub action: FileTransferAction,
 }
 
 #[typetag::serde]
-impl AnyPacketData for FileTransferPacketData {
+impl AnyPacket for FileTransferPacket {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
